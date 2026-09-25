@@ -1,5 +1,6 @@
 local lfs = require("lfs")
 local json = require("dkjson")
+local scrobble = require("src.scrobble")
 
 local files = {}
 
@@ -165,6 +166,25 @@ function files.mount_device(dev_path)
 	return mount_path
 end
 
+function files.unmount_device(dev_path)
+	if not dev_path:match("^/dev/[%w%-_]+$") then
+		return false, "Invalid device path: " .. tostring(dev_path)
+	end
+
+	local handle, err = io.popen("udisksctl unmount -b '" .. dev_path .. "' 2>&1")
+	if not handle then
+		return false, "Failed to unmount device: " .. err
+	end
+	local output = handle:read("*a")
+	handle:close()
+
+	if output:match("^Unmounted%s+" .. dev_path:gsub("%-", "%%-")) then
+		return true
+	end
+
+	return false, "Failed to unmount device: " .. output
+end
+
 function files.validate_id(id)
 	if type(id) ~= "string" or not id:match("^%x%x%x%x$") then
 		return nil, "Invalid VID/PID format: " .. tostring(id)
@@ -173,10 +193,17 @@ function files.validate_id(id)
 	return id:lower()
 end
 
--- local dev_path, err = find_block_device("0781", "5567")
--- if not dev_path then
--- 	error(err)
--- end
--- print("Found device:", dev_path)
+function files.get_scrobble_log(mount_path)
+	local file, err = io.open(mount_path .. "/.rockbox/playback.log", "r")
+	if not file then
+		return nil, err
+	end
+	local data = file:read("*a")
+	file:close()
+
+	local trimmed_data = scrobble.trim_log_by_date(data)
+
+	return trimmed_data
+end
 
 return files

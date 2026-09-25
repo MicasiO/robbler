@@ -1,5 +1,6 @@
 local files = require("src.files")
 local requests = require("src.requests")
+local scrobble = require("src.scrobble")
 
 local function api_setup()
 	io.write("Enter your Last.fm API key: ")
@@ -79,4 +80,46 @@ end
 
 if not device then
 	device_setup()
+end
+
+local dev_path, dev_path_err = files.find_device(device.product_id, device.vendor_id)
+if not dev_path then
+	print(dev_path_err)
+	os.exit(1)
+end
+
+local mount_path, mount_path_err = files.mount_device(dev_path)
+if not mount_path then
+	print(mount_path_err)
+	os.exit(1)
+end
+
+local scrobble_log, scrobble_err = files.get_scrobble_log(mount_path)
+if not scrobble_log then
+	print(scrobble_err)
+	goto cleanup
+end
+
+do
+	local data = scrobble.get_log_metadata(scrobble_log, mount_path)
+	for i, entry in ipairs(data) do
+		print(
+			string.format(
+				"[%d] %s - %s (%s) @ %s [mbid: %s]",
+				i,
+				entry.artist or "?",
+				entry.track or "?",
+				entry.album or "?",
+				os.date("%Y-%m-%d %H:%M:%S", entry.timestamp),
+				entry.mbid or "none"
+			)
+		)
+	end
+end
+
+::cleanup::
+local unmount, unmount_err = files.unmount_device(dev_path)
+if not unmount then
+	print(unmount_err)
+	os.exit(1)
 end
