@@ -196,8 +196,9 @@ end
 function files.get_scrobble_log(mount_path)
 	local file, err = io.open(mount_path .. "/.rockbox/playback.log", "r")
 	if not file then
-		return nil, err
+		return nil, "Failed to open log (maybe you have not listened to any music?)\n".. err
 	end
+
 	local data = file:read("*a")
 	file:close()
 

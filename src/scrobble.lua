@@ -20,19 +20,32 @@ function scrobble.trim_log_by_date(log)
 
 	local kept_lines = {}
 
+	local i = 1
 	for line in log:gmatch("[^\r\n]+") do
 		local timestamp_str, listened_str, duration_str = line:match("^(%d+):(%d+):(%d+):")
 		local timestamp = timestamp_str and tonumber(timestamp_str)
 		local listened = listened_str and tonumber(listened_str)
 		local duration = duration_str and tonumber(duration_str)
 
-		if timestamp and listened and duration and timestamp >= cutoff then
+		if not timestamp and not listened and not duration then
+			goto continue
+		end
+
+		if timestamp >= cutoff then
 			if listened >= duration / 2 or listened > FOUR_MINUTES then
 				table.insert(kept_lines, line)
+				goto continue
 			end
 		end
+
+		io.write("\rSkipped tracks: " .. i)
+		io.flush()
+
+		i = i + 1
+		::continue::
 	end
 
+	print()
 	return table.concat(kept_lines, "\n") .. "\n"
 end
 
@@ -82,6 +95,7 @@ end
 
 function scrobble.get_log_metadata(log, mount_path)
 	local data = {}
+	local errors = {}
 
 	local i = 1
 	for line in log:gmatch("[^\r\n]+") do
@@ -95,15 +109,26 @@ function scrobble.get_log_metadata(log, mount_path)
 
 		local metadata, err = scrobble.get_file_metadata(path)
 		if not metadata then
-			print(err)
+			table.insert(errors, path .. ": " .. err)
 			goto continue
 		end
 		metadata.timestamp = timestamp
 
 		table.insert(data, metadata)
-                print("Parsed tracks: " .. i)
+
+		io.write("\rParsed tracks: " .. i)
+		io.flush()
+
                 i = i + 1
 		::continue::
+	end
+
+	print()
+	if #errors > 0 then
+		print(#errors .. " file(s) failed:")
+		for _, e in ipairs(errors) do
+			print("  " .. e)
+		end
 	end
 
 	return data

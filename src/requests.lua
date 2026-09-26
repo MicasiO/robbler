@@ -52,6 +52,44 @@ local function get_session(token, api_key, shared_secret)
 	return session_res.session.key
 end
 
+local function build_scrobble_params(batch, api_key, session_key, shared_key)
+	local params = {
+		method = "track.scrobble",
+		api_key = api_key,
+		sk = session_key,
+	}
+
+	for i, entry in ipairs(batch) do
+		local idx = i - 1
+		params["artist[" .. idx .. "]"] = entry.artist
+		params["track[" .. idx .. "]"] = entry.track
+		params["timestamp[" .. idx .. "]"] = tostring(entry.timestamp)
+		if entry.album then
+			params["album[" .. idx .. "]"] = entry.album
+		end
+		if entry.mbid then
+			params["mbid[" .. idx .. "]"] = entry.mbid
+		end
+	end
+
+	local keys = {}
+	for k in pairs(params) do
+		table.insert(keys, k)
+	end
+	table.sort(keys)
+
+	local sig_string = ""
+	for _, k in ipairs(keys) do
+		sig_string = sig_string .. k .. params[k]
+	end
+	sig_string = sig_string .. shared_key
+
+	params.api_sig = md5.sumhexa(sig_string)
+	params.format = "json"
+
+	return params
+end
+
 function requests.fetch(url, params, method)
 	local query_string = util.dict_to_query(params)
 
@@ -75,6 +113,63 @@ function requests.fetch(url, params, method)
 	end
 
 	return data
+end
+
+function requests.post(url, params)
+	local body = util.dict_to_query(params)
+
+	local req = request.new_from_uri(url)
+	req.headers:upsert(":method", "POST")
+	req.headers:upsert("content-type", "application/x-www-form-urlencoded")
+	req:set_body(body)
+
+	local headers, stream = req:go()
+	if not stream then
+		return nil, "Network error: " .. tostring(headers)
+	end
+
+	local response_body = stream:get_body_as_string()
+
+	local data, _, err = json.decode(response_body)
+	if err then
+		return nil, "JSON decode error: " .. tostring(err)
+	end
+
+	if data.error then
+		return nil, "Last.fm error: " .. tostring(data.error) .. ": " .. tostring(data.message)
+	end
+
+	return data
+end
+
+-- splits up to batches of 50 and sends POST request to Last.fm
+function requests.send_scrobble(data, api_key, session_key, shared_secret)
+	local batches = {}
+	local current_batch = {}
+	for i, entry in ipairs(data) do
+		table.insert(current_batch, entry)
+		if #current_batch == 50 or i == #data then
+			table.insert(batches, current_batch)
+			current_batch = {}
+		end
+	end
+
+	local scrobble_url = "https://ws.audioscrobbler.com/2.0/"
+	local results = {}
+
+	for _, batch in ipairs(batches) do
+		local params = build_scrobble_params(batch, api_key, session_key, shared_secret)
+
+		local response, err = requests.post(scrobble_url, params)
+		if not response then
+			print("Batch failed: " .. err)
+		else
+			table.insert(results, response)
+		end
+
+	end
+
+	return results
 end
 
 function requests.auth_user(api_key, shared_key)
