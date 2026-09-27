@@ -35,11 +35,6 @@ local data = scrobble.get_log_metadata(scrobble_log, mount_path)
 
 if #data > 0 then
 	scrobble.run_scrobble(data, keys)
-
-	local remove, err = os.remove(mount_path .. "/.rockbox/playback.log")
-	if not remove then
-		print("Failed to delete playback.log: " .. err)
-	end
 else
 	print("No entries to scrobble")
 end

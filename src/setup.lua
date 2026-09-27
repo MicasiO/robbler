@@ -70,6 +70,8 @@ function setup.start_setup()
                 os.exit(1)
         end
 
+	keys, keys_err = files.keys_exist()
+
         if not keys then
                 api_setup()
         end
@@ -83,6 +85,8 @@ function setup.start_setup()
         if not device then
                 device_setup()
         end
+
+        device, device_err = files.device_exists()
 
         return keys, device
 end
