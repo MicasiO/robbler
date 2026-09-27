@@ -1,8 +1,6 @@
 local files = require("src.files")
-local requests = require("src.requests")
 local scrobble = require("src.scrobble")
 local setup = require("src.setup")
-local json = require("dkjson")
 
 local function cleanup(dev_path)
 	local unmount, unmount_err = files.unmount_device(dev_path)
@@ -36,10 +34,7 @@ end
 local data = scrobble.get_log_metadata(scrobble_log, mount_path)
 
 if #data > 0 then
-	local scrobble_req = requests.send_scrobble(data, keys.api_key, keys.session_key, keys.shared_key)
-	if scrobble_req then
-		print(json.encode(scrobble_req, { indent = true }))
-	end
+	scrobble.run_scrobble(data, keys)
 
 	local remove, err = os.remove(mount_path .. "/.rockbox/playback.log")
 	if not remove then

@@ -1,4 +1,5 @@
 local json = require("dkjson")
+local requests = require("src.requests")
 
 local scrobble = {}
 
@@ -47,6 +48,24 @@ function scrobble.trim_log_by_date(log)
 
 	print()
 	return table.concat(kept_lines, "\n") .. "\n"
+end
+
+function scrobble.run_scrobble(data, keys)
+	local scrobble_req = requests.send_scrobble(data, keys.api_key, keys.session_key, keys.shared_key)
+	if scrobble_req then
+		local total_accepted = 0
+		local total_ignored = 0
+
+		for _, response in ipairs(scrobble_req) do
+			local attr = response.scrobbles and response.scrobbles["@attr"]
+			if attr then
+				total_accepted = total_accepted + tonumber(attr.accepted or 0)
+				total_ignored = total_ignored + tonumber(attr.ignored or 0)
+			end
+		end
+
+		print(string.format("Scrobbled: %d accepted, %d ignored", total_accepted, total_ignored))
+	end
 end
 
 function scrobble.get_file_metadata(path)
